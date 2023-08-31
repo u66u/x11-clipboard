@@ -38,6 +38,31 @@ void printSelection(Display* display, Window window) {
     }
 }
 
+void handleSelectionClear(XEvent event) {
+    std::cout << "Lost ownership of clipboard" << std::endl;
+}
+
+void handleSelectionRequest(Display* display, XEvent event) {
+    XSelectionRequestEvent* req = &event.xselectionrequest;
+
+    if (req->target == XA_STRING) {
+        const char* text = "Hello, clipboard!";
+        XChangeProperty(display, req->requestor, req->property, XA_STRING, 8, PropModeReplace, (unsigned char*)text, strlen(text));
+    } else {
+        XChangeProperty(display, req->requestor, req->property, None, 0, PropModeReplace, NULL, 0);
+    }
+
+    XSelectionEvent sev;
+    sev.type = SelectionNotify;
+    sev.requestor = req->requestor;
+    sev.selection = req->selection;
+    sev.target = req->target;
+    sev.property = req->property;
+    sev.time = req->time;
+
+    XSendEvent(display, req->requestor, True, NoEventMask, (XEvent*)&sev);
+}
+
 int main() {
     Display* display = XOpenDisplay(nullptr);
     if (display == nullptr) {
@@ -60,8 +85,22 @@ int main() {
     }
 
     while (true) {
-        printSelection(display, window);
+        XEvent event;
+        XNextEvent(display, &event);
+
+        switch (event.type) {
+            case SelectionClear:
+                handleSelectionClear(event);
+                break;
+            case SelectionRequest:
+                handleSelectionRequest(display, event);
+                break;
+            default:
+                printSelection(display, window);
+                break;
+        }
     }
+
 
     XCloseDisplay(display);
     return 0;
